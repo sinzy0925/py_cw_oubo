@@ -34,7 +34,27 @@ def ensure_output_dir(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
-def output_path(output_dir: Path, job_id: str) -> Path:
+RISK_LABELS = ("[正常]", "[注意]", "[危険]")
+
+
+def risk_label_from_application_text(application_text: str | None) -> str | None:
+    if not application_text:
+        return None
+    first_line = application_text.splitlines()[0].strip()
+    for label in RISK_LABELS:
+        if first_line == label or first_line.startswith(label):
+            return label
+    return None
+
+
+def output_path(
+    output_dir: Path,
+    job_id: str,
+    application_text: str | None = None,
+) -> Path:
+    label = risk_label_from_application_text(application_text)
+    if label:
+        return output_dir / f"{label}{job_id}.json"
     return output_dir / f"{job_id}.json"
 
 
@@ -111,7 +131,6 @@ async def process_job(
     processed_ids: set[str],
 ) -> tuple[bool, str]:
     job_id = job_id_from_url(listing.url)
-    out_path = output_path(settings.output_dir, job_id)
     job: JobDetail | None = None
 
     try:
@@ -120,6 +139,7 @@ async def process_job(
             raise ValueError("募集内容を取得できませんでした。")
 
         application_text = gemini.generate_application(job)
+        out_path = output_path(settings.output_dir, job_id, application_text)
         save_result(out_path, build_success_payload(job, application_text))
         append_processed_id(PROCESSED_IDS_FILE, job_id, processed_ids)
         print(f"成功: {listing.url}")
@@ -127,6 +147,7 @@ async def process_job(
     except Exception as exc:
         error_message = str(exc)
         title = job.title if job else listing.title
+        out_path = output_path(settings.output_dir, job_id)
         save_result(
             out_path,
             build_failure_payload(listing.url, error_message, title=title, job_id=job_id),
