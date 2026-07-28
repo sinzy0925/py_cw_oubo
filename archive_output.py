@@ -9,20 +9,18 @@ from config import OUTPUT_DIR
 KEEP_FILES = {"processed_ids.txt", "failed_urls.txt"}
 
 
-def archive_json_files(output_dir: Path, timestamp: datetime | None = None) -> Path:
+def archive_json_files(output_dir: Path, timestamp: datetime | None = None) -> Path | None:
+    json_files = sorted(output_dir.glob("*.json"))
+    if not json_files:
+        return None
+
     when = timestamp or datetime.now()
     archive_dir = output_dir / when.strftime("%Y%m%d_%H%M%S")
     archive_dir.mkdir(parents=True, exist_ok=False)
 
-    moved = 0
-    for json_file in sorted(output_dir.glob("*.json")):
+    for json_file in json_files:
         target = archive_dir / json_file.name
         json_file.rename(target)
-        moved += 1
-
-    if moved == 0:
-        archive_dir.rmdir()
-        raise FileNotFoundError(f"{output_dir} に移動対象の JSON ファイルがありません。")
 
     return archive_dir
 
@@ -46,6 +44,10 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     archive_dir = archive_json_files(output_dir)
+    if archive_dir is None:
+        print(f"{output_dir} に移動対象の JSON ファイルがないためスキップしました。")
+        return
+
     moved_count = len(list(archive_dir.glob("*.json")))
     print(f"{moved_count} 件を移動しました: {archive_dir}")
 
